@@ -1,63 +1,27 @@
 import streamlit as st  
+from streamlit_option_menu import option_menu  
+from utils.data_utils import read_file, clean_data, display_data_with_pagination  
+from utils.knn_utils import knn_predict  
 import uuid  
 import pandas as pd  
 from sklearn.preprocessing import MinMaxScaler  
 from sklearn.metrics import euclidean_distances  
 from io import BytesIO  
-from streamlit_option_menu import option_menu  
   
 st.set_page_config(layout="wide", page_title="Analisis KNN", page_icon="🔍")  
   
 # Add logo in the sidebar  
-st.sidebar.image('Logo Klinik Gunuang.png', width=200, use_container_width=True)  # Gantilah URL dengan URL logo Anda  
-    
-def read_file(file):  
-    try:  
-        if file.type == "text/csv":  
-            return pd.read_csv(file)  
-        elif file.type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":  
-            return pd.read_excel(file)  
-        else:  
-            return None  
-    except Exception as e:  
-        st.error(f"Terjadi kesalahan saat membaca file: {e}")  
-        return None  
+st.sidebar.image('assets/Logo Klinik Gunuang.png', width=200, use_container_width=True)  
   
-def clean_data(data):  
-    try:  
-        data['Harga'] = data['Harga'].replace('[\$,]', '', regex=True).astype(float)  
-        return data  
-    except Exception as e:  
-        st.error(f"Terjadi kesalahan saat membersihkan data: {e}")  
-        return None  
-  
-def display_data_with_pagination(data, page_size=50, key_prefix=None):  
-    # Jika tidak ada key_prefix yang diberikan, buat satu yang unik  
-    if key_prefix is None:  
-        key_prefix = str(uuid.uuid4())  
-  
-    total_rows = data.shape[0]  
-    num_pages = total_rows // page_size + (1 if total_rows % page_size > 0 else 0)  
-    page_number = st.number_input(f'{key_prefix}Page Number', min_value=1, max_value=num_pages, step=1, value=1, key=f"{key_prefix}_page_number")  
-    start_row = (page_number - 1) * page_size  
-    end_row = min(start_row + page_size, total_rows)  
-    st.write(f"Menampilkan baris {start_row} hingga {end_row} dari total {total_rows}")  
-    st.dataframe(data.iloc[start_row:end_row], use_container_width=True)  # Ganti use_column_width dengan use_container_width  
-  
-def knn_predict(data, test_data, k):  
-    scaler = MinMaxScaler()  
-    normalized_data = pd.DataFrame(scaler.fit_transform(data[['Terjual', 'Harga', 'Stok']]), columns=['Terjual', 'Harga', 'Stok'])  
-    normalized_test_data = scaler.transform(test_data)  
-      
-    distances = euclidean_distances(normalized_data, normalized_test_data)  
-    data['Distance'] = distances[:, 0]  
-    nearest_neighbors = data.nsmallest(k, 'Distance')  
-      
-    prediction = nearest_neighbors['Label'].mode()[0]  
-    total_sales = nearest_neighbors['Terjual'].sum()  
-    avg_sales = nearest_neighbors['Terjual'].mean()  
-      
-    return prediction, total_sales, avg_sales, nearest_neighbors  
+# Sidebar with option menu  
+with st.sidebar:  
+    selected_page = option_menu(  
+        menu_title="Klinik Gunuang",  
+        options=["Dashboard", "Data Training", "Data Uji", "Hitung Jarak Euclidean", "Perangkingan", "Hasil Prediksi"],  
+        icons=["house", "file-earmark-spreadsheet", "file-earmark-text", "calculator", "graph-up-arrow", "check-circle"],  
+        menu_icon="cast",  
+        default_index=0,  
+    )  
   
 # Inisialisasi session state  
 if 'data_train' not in st.session_state:  
@@ -83,16 +47,6 @@ if 'neighbors' not in st.session_state:
 if 'original_neighbors' not in st.session_state:  
     st.session_state['original_neighbors'] = None  # Menyimpan salinan asli data neighbors  
   
-# Sidebar with option menu  
-with st.sidebar:  
-    selected_page = option_menu(  
-        menu_title="Klinik Gunuang",  # Required  
-        options=["Dashboard", "Data Training", "Data Uji", "Hitung Jarak Euclidean", "Perangkingan", "Hasil Prediksi"],  # Required  
-        icons=["house", "file-earmark-spreadsheet", "file-earmark-text", "calculator", "graph-up-arrow", "check-circle"],  # Optional  
-        menu_icon="cast",  # Optional  
-        default_index=0,  # Optional  
-    )  
-  
 # Dashboard Page  
 if selected_page == "Dashboard":  
     st.title("Dashboard")  
@@ -102,12 +56,11 @@ if selected_page == "Dashboard":
     1. **Data Training**: Unggah dan normalisasi data training.  
     2. **Data Uji**: Tambahkan data uji secara manual atau unggah file. Normalisasi data, hitung jarak Euclidean, lakukan perangkingan, dan lihat hasil prediksi.  
     """)  
-      
   
 # Data Training Page  
 elif selected_page == "Data Training":  
     st.title("Data Training")  
-    if st.session_state['train_file_name']:  
+    if st.session_state.get('train_file_name'):  
         st.write(f"File yang telah diunggah: {st.session_state['train_file_name']}")  
     uploaded_file = st.file_uploader("Pilih file CSV atau Excel", type=["csv", "xlsx"], key="train_upload")  
     if uploaded_file is not None:  
@@ -125,10 +78,10 @@ elif selected_page == "Data Training":
                     display_data_with_pagination(st.session_state['normalized_train_data'], key_prefix="normalized_train")  
         else:  
             st.write("Format file tidak didukung. Harap unggah file CSV atau Excel.")  
-    elif st.session_state['data_train'] is not None:  
+    elif st.session_state.get('data_train') is not None:  
         st.write("Data Training:")  
         display_data_with_pagination(st.session_state['data_train'], key_prefix="train")  
-        if st.session_state['normalized_train_data'] is not None:  
+        if st.session_state.get('normalized_train_data') is not None:  
             st.write("Data Training yang dinormalisasi:")  
             display_data_with_pagination(st.session_state['normalized_train_data'], key_prefix="normalized_train")  
   
@@ -185,7 +138,7 @@ elif selected_page == "Data Uji":
         display_data_with_pagination(st.session_state['data_test'], key_prefix=str(uuid.uuid4()))  
   
     # Button Normalisasi (Di bawah tabel)  
-    if st.session_state['normalized_train_data'] is not None:  
+    if st.session_state.get('normalized_train_data') is not None:  
         if st.button("Normalisasi Data Uji"):  
             if st.session_state['data_test'] is not None and not st.session_state['data_test'].empty:  
                 scaler = MinMaxScaler()  
@@ -205,7 +158,7 @@ elif selected_page == "Data Uji":
 elif selected_page == "Hitung Jarak Euclidean":  
     st.title("Hitung Jarak Euclidean")  
       
-    if st.session_state['normalized_train_data'] is not None and st.session_state['normalized_test_data'] is not None:  
+    if st.session_state.get('normalized_train_data') is not None and st.session_state.get('normalized_test_data') is not None:  
         data_for_knn = st.session_state['normalized_train_data']  
         test_data = st.session_state['normalized_test_data']  
           
@@ -226,11 +179,12 @@ elif selected_page == "Hitung Jarak Euclidean":
         display_data_with_pagination(st.session_state['distances'], key_prefix=str(uuid.uuid4()))  
     else:  
         st.write("Harap unggah dan normalisasi data training serta data uji terlebih dahulu.")  
+  
 # Perangkingan Page  
 elif selected_page == "Perangkingan":  
     st.title("Perangkingan")  
       
-    if st.session_state['distances'] is not None:  
+    if st.session_state.get('distances') is not None:  
         data = st.session_state['distances']  
   
         # Dropdown untuk memilih data uji  
@@ -250,11 +204,12 @@ elif selected_page == "Perangkingan":
         display_data_with_pagination(nearest_neighbors, key_prefix=str(uuid.uuid4()))  
     else:  
         st.write("Harap hitung jarak Euclidean terlebih dahulu.")  
+  
 # Hasil Prediksi Page  
 elif selected_page == "Hasil Prediksi":  
     st.title("Hasil Prediksi")  
       
-    if st.session_state['normalized_test_data'] is not None and st.session_state['normalized_train_data'] is not None:  
+    if st.session_state.get('normalized_test_data') is not None and st.session_state.get('normalized_train_data') is not None:  
         results = []  
         k = st.session_state['k']  # Gunakan nilai k yang sudah diatur di halaman perangkingan  
   
@@ -287,7 +242,7 @@ elif selected_page == "Hasil Prediksi":
   
         result_df = pd.DataFrame(results)  
         st.write("Hasil Prediksi:")  
-        st.dataframe(result_df, use_container_width=True)  
+        display_data_with_pagination(result_df, key_prefix=str(uuid.uuid4()))  
   
         # Tombol unduh hasil sebagai CSV  
         csv = result_df.to_csv(index=False)  
@@ -295,7 +250,7 @@ elif selected_page == "Hasil Prediksi":
   
         # Tombol unduh hasil sebagai Excel  
         excel_buffer = BytesIO()  
-        with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:  # atau 'openpyxl'  
+        with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:  
             result_df.to_excel(writer, index=False, sheet_name='Hasil Prediksi')  
           
         st.download_button(label="Unduh Hasil sebagai Excel", data=excel_buffer.getvalue(), file_name='hasil_prediksi.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')  
